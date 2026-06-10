@@ -21,7 +21,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
 
@@ -108,6 +108,13 @@
             font-size: 1.8rem;
             font-weight: bold;
             color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .flag-emoji {
+            font-size: 2.5rem;
         }
 
         .status-badge {
@@ -265,20 +272,32 @@
         }
 
         function showResult(data) {
-            const infoItems = Object.entries(data.info).map(([key, value]) => {
-                const label = formatLabel(key);
-                return `
-                    <div class="info-item">
-                        <div class="info-label">${label}</div>
-                        <div class="info-value">${value || '-'}</div>
-                    </div>
-                `;
-            }).join('');
+            const flagEmoji = data.info.flag_emoji || '';
+            const infoItems = Object.entries(data.info)
+                .filter(([key]) => !['flag_img', 'flag_emoji'].includes(key))
+                .map(([key, value]) => {
+                    const label = formatLabel(key);
+                    if (key === 'in_eu') {
+                        value = value ? '是' : '否';
+                    }
+                    if (key === 'timezone_dst') {
+                        value = value ? '是' : '否';
+                    }
+                    return `
+                        <div class="info-item">
+                            <div class="info-label">${label}</div>
+                            <div class="info-value">${value !== null && value !== undefined ? value : '-'}</div>
+                        </div>
+                    `;
+                }).join('');
 
             resultDiv.innerHTML = `
                 <div class="result-card">
                     <div class="result-header">
-                        <span class="ip-address">${data.ip}</span>
+                        <span class="ip-address">
+                            ${flagEmoji ? `<span class="flag-emoji">${flagEmoji}</span>` : ''}
+                            ${data.ip}
+                        </span>
                         <span class="status-badge status-success">成功</span>
                     </div>
                     <div class="info-grid">
@@ -300,12 +319,16 @@
                 country_code_iso3: 'ISO3 代码',
                 country_capital: '首都',
                 country_tld: '顶级域名',
+                continent: '大洲',
                 continent_code: '大洲代码',
                 in_eu: '欧盟成员',
                 postal: '邮编',
                 latitude: '纬度',
                 longitude: '经度',
                 timezone: '时区',
+                timezone_abbr: '时区缩写',
+                timezone_utc: 'UTC 偏移',
+                timezone_dst: '夏令时',
                 utc_offset: 'UTC 偏移',
                 country_calling_code: '国际区号',
                 currency: '货币',
@@ -316,7 +339,9 @@
                 asn: 'ASN',
                 org: '组织',
                 isp: 'ISP',
-                hostname: '主机名'
+                hostname: '主机名',
+                domain: '域名',
+                borders: '接壤国家'
             };
             return labels[key] || key.replace(/_/g, ' ').toUpperCase();
         }
