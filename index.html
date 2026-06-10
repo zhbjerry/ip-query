@@ -43,9 +43,17 @@
             margin-bottom: 30px;
         }
 
-        .search-input {
+        .input-wrapper {
             flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-input {
+            width: 100%;
             padding: 14px 20px;
+            padding-right: 50px;
             font-size: 1.1rem;
             border: 2px solid #e2e8f0;
             border-radius: 8px;
@@ -55,6 +63,34 @@
 
         .search-input:focus {
             border-color: #4299e1;
+        }
+
+        .clear-btn {
+            position: absolute;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: #e2e8f0;
+            color: #718096;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            padding: 0;
+        }
+
+        .clear-btn:hover {
+            background: #cbd5e0;
+            color: #4a5568;
+        }
+
+        .clear-btn.hidden {
+            display: none;
         }
 
         .search-btn {
@@ -140,6 +176,23 @@
             gap: 20px;
         }
 
+        .info-section {
+            margin-bottom: 24px;
+        }
+
+        .info-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
         .info-item {
             padding: 16px;
             background: #f7fafc;
@@ -211,7 +264,10 @@
         </header>
 
         <div class="search-box">
-            <input type="text" class="search-input" id="ipInput" placeholder="输入 IP 地址（如 8.8.8.8）" />
+            <div class="input-wrapper">
+                <input type="text" class="search-input" id="ipInput" placeholder="输入 IP 地址（如 8.8.8.8）" />
+                <button class="clear-btn hidden" id="clearBtn">×</button>
+            </div>
             <button class="search-btn" id="searchBtn">查询</button>
             <button class="my-ip-btn" id="myIpBtn">我的 IP</button>
         </div>
@@ -227,6 +283,7 @@
         const ipInput = document.getElementById('ipInput');
         const searchBtn = document.getElementById('searchBtn');
         const myIpBtn = document.getElementById('myIpBtn');
+        const clearBtn = document.getElementById('clearBtn');
         const resultDiv = document.getElementById('result');
 
         async function queryIP(ip) {
@@ -272,24 +329,154 @@
         }
 
         function showResult(data) {
-            const flagEmoji = data.info.flag_emoji || '';
-            const infoItems = Object.entries(data.info)
-                .filter(([key]) => !['flag_img', 'flag_emoji'].includes(key))
-                .map(([key, value]) => {
-                    const label = formatLabel(key);
-                    if (key === 'in_eu') {
-                        value = value ? '是' : '否';
+            const flagEmoji = data.info.flag_emoji || data.info.flag?.emoji || '';
+            
+            // 定义信息分组和优先级
+            const importantFields = ['ip', 'type', 'version', 'country', 'country_code', 'region', 'region_code', 'city', 'postal', 'capital', 'country_capital', 'calling_code', 'country_calling_code'];
+            const locationFields = ['continent', 'continent_code', 'in_eu', 'borders'];
+            const networkFields = ['isp', 'org', 'organization', 'domain', 'asn'];
+            const timezoneFields = ['timezone', 'timezone_id', 'timezone_abbr', 'timezone_utc', 'timezone_offset', 'timezone_dst', 'utc_offset', 'is_dst'];
+            const coordinateFields = ['latitude', 'longitude'];
+            
+            const importantItems = [];
+            const locationItems = [];
+            const networkItems = [];
+            const timezoneItems = [];
+            const coordinateItems = [];
+            const otherItems = [];
+            
+            const processedKeys = new Set();
+            
+            for (const [key, value] of Object.entries(data.info)) {
+                if (key === 'flag_img' || key === 'flag_emoji' || key === 'success' || key === 'readme') continue;
+                if (processedKeys.has(key)) continue;
+                
+                const label = formatLabel(key);
+                
+                if (typeof value === 'object' && value !== null) {
+                    for (const [subKey, subValue] of Object.entries(value)) {
+                        const compositeKey = `${key}.${subKey}`;
+                        if (processedKeys.has(compositeKey)) continue;
+                        processedKeys.add(compositeKey);
+                        
+                        const subLabel = formatLabel(subKey);
+                        const itemHtml = `
+                            <div class="info-item">
+                                <div class="info-label">${label} - ${subLabel}</div>
+                                <div class="info-value">${subValue !== null && subValue !== undefined ? subValue : '-'}</div>
+                            </div>
+                        `;
+                        
+                        const networkSubKeys = ['asn', 'org', 'organization', 'isp', 'domain'];
+                        const timezoneSubKeys = ['id', 'abbr', 'utc', 'offset', 'is_dst'];
+                        const flagSubKeys = ['img', 'emoji', 'emoji_unicode'];
+                        
+                        if (key === 'connection' || networkSubKeys.includes(subKey)) {
+                            networkItems.push(itemHtml);
+                        } else if (key === 'timezone' || timezoneSubKeys.includes(subKey)) {
+                            timezoneItems.push(itemHtml);
+                        } else if (key === 'flag' || flagSubKeys.includes(subKey)) {
+                            continue;
+                        } else {
+                            otherItems.push(itemHtml);
+                        }
                     }
-                    if (key === 'timezone_dst') {
-                        value = value ? '是' : '否';
+                } else {
+                    processedKeys.add(key);
+                    let displayValue = value;
+                    if (key === 'in_eu' || key === 'timezone_dst' || key === 'is_dst') {
+                        displayValue = value ? '是' : '否';
                     }
-                    return `
+                    const itemHtml = `
                         <div class="info-item">
                             <div class="info-label">${label}</div>
-                            <div class="info-value">${value !== null && value !== undefined ? value : '-'}</div>
+                            <div class="info-value">${displayValue !== null && displayValue !== undefined ? displayValue : '-'}</div>
                         </div>
                     `;
-                }).join('');
+                    
+                    if (importantFields.includes(key)) {
+                        importantItems.push(itemHtml);
+                    } else if (locationFields.includes(key)) {
+                        locationItems.push(itemHtml);
+                    } else if (networkFields.includes(key)) {
+                        networkItems.push(itemHtml);
+                    } else if (timezoneFields.includes(key)) {
+                        timezoneItems.push(itemHtml);
+                    } else if (coordinateFields.includes(key)) {
+                        coordinateItems.push(itemHtml);
+                    } else {
+                        otherItems.push(itemHtml);
+                    }
+                }
+            }
+
+            const sections = [];
+            
+            if (importantItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">基本信息</div>
+                        <div class="info-grid">
+                            ${importantItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
+            
+            if (locationItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">地理位置</div>
+                        <div class="info-grid">
+                            ${locationItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
+            
+            if (networkItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">网络信息</div>
+                        <div class="info-grid">
+                            ${networkItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
+            
+            if (timezoneItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">时区信息</div>
+                        <div class="info-grid">
+                            ${timezoneItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
+            
+            if (coordinateItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">坐标信息</div>
+                        <div class="info-grid">
+                            ${coordinateItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
+            
+            if (otherItems.length > 0) {
+                sections.push(`
+                    <div class="info-section">
+                        <div class="section-title">其他信息</div>
+                        <div class="info-grid">
+                            ${otherItems.join('')}
+                        </div>
+                    </div>
+                `);
+            }
 
             resultDiv.innerHTML = `
                 <div class="result-card">
@@ -298,11 +485,9 @@
                             ${flagEmoji ? `<span class="flag-emoji">${flagEmoji}</span>` : ''}
                             ${data.ip}
                         </span>
-                        <span class="status-badge status-success">成功</span>
+                        <span class="status-badge status-success">数据来源: ${data.source}</span>
                     </div>
-                    <div class="info-grid">
-                        ${infoItems}
-                    </div>
+                    ${sections.join('')}
                 </div>
             `;
         }
@@ -310,6 +495,8 @@
         function formatLabel(key) {
             const labels = {
                 ip: 'IP 地址',
+                success: '查询成功',
+                type: '类型',
                 version: '版本',
                 city: '城市',
                 region: '地区',
@@ -318,6 +505,7 @@
                 country_code: '国家代码',
                 country_code_iso3: 'ISO3 代码',
                 country_capital: '首都',
+                capital: '首都',
                 country_tld: '顶级域名',
                 continent: '大洲',
                 continent_code: '大洲代码',
@@ -329,8 +517,11 @@
                 timezone_abbr: '时区缩写',
                 timezone_utc: 'UTC 偏移',
                 timezone_dst: '夏令时',
+                timezone_offset: '偏移量',
+                timezone_id: '时区 ID',
                 utc_offset: 'UTC 偏移',
                 country_calling_code: '国际区号',
+                calling_code: '国际区号',
                 currency: '货币',
                 currency_name: '货币名称',
                 languages: '语言',
@@ -338,10 +529,22 @@
                 country_population: '国家人口',
                 asn: 'ASN',
                 org: '组织',
+                organization: '组织',
                 isp: 'ISP',
                 hostname: '主机名',
                 domain: '域名',
-                borders: '接壤国家'
+                borders: '接壤国家',
+                flag: '国旗',
+                img: '图片',
+                emoji: '表情',
+                emoji_unicode: 'Unicode',
+                connection: '网络连接',
+                id: 'ID',
+                abbr: '缩写',
+                is_dst: '夏令时',
+                offset: '偏移量',
+                utc: 'UTC',
+                readme: '文档'
             };
             return labels[key] || key.replace(/_/g, ' ').toUpperCase();
         }
@@ -355,7 +558,24 @@
 
         myIpBtn.addEventListener('click', () => {
             ipInput.value = '';
+            toggleClearButton();
             queryIP('');
+        });
+
+        function toggleClearButton() {
+            if (ipInput.value.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+
+        ipInput.addEventListener('input', toggleClearButton);
+
+        clearBtn.addEventListener('click', () => {
+            ipInput.value = '';
+            ipInput.focus();
+            toggleClearButton();
         });
 
         ipInput.addEventListener('keypress', (e) => {

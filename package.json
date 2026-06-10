@@ -1,0 +1,13 @@
+{
+  "name": "ipquery",
+  "version": "1.0.0",
+  "description": "IP 查询工具",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["ip", "query", "geolocation"],
+  "author": "",
+  "license": "MIT"
+}

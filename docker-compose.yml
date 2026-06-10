@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  ipquery:
+    build: .
+    container_name: ipquery-app
+    ports:
+      - "13006:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
