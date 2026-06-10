@@ -100,9 +100,8 @@ const API_SERVICES = [
 ];
 
 async function queryIP(ip: string) {
-  // 如果是本地IP，不传参数让API服务自动检测
-  const isLocalIP = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip === '';
-  const targetIP = isLocalIP ? '' : ip;
+  // 如果是私有/本地 IP，不传参数让 API 服务自动检测
+  const targetIP = isPrivateOrLocalIp(ip) ? '' : ip;
   
   for (const service of API_SERVICES) {
     try {
@@ -502,11 +501,74 @@ const HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// 获取用户真实 IP 的函数
+function getClientIp(req: Request) {
+  // 检查各种代理头
+  const headers = req.headers;
+  
+  // 常见的代理头
+  const ipHeaders = [
+    'x-forwarded-for',
+    'x-real-ip',
+    'cf-connecting-ip',
+    'x-client-ip',
+    'x-cluster-client-ip',
+    'forwarded-for',
+    'forwarded',
+    'x-forwarded'
+  ];
+  
+  for (const header of ipHeaders) {
+    const value = headers.get(header);
+    if (value) {
+      // x-forwarded-for 可能包含多个 IP，取第一个
+      const ips = value.split(',').map(ip => ip.trim());
+      for (const ip of ips) {
+        if (ip && !isPrivateIp(ip)) {
+          return ip;
+        }
+      }
+    }
+  }
+  
+  return '';
+}
+
+// 判断是否是私有 IP
+function isPrivateIp(ip: string) {
+  if (!ip) return false;
+  
+  // IPv4 私有地址范围
+  const ipv4Private = /^(?:10\.|172\.(?:1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.)/;
+  // IPv6 本地地址
+  const ipv6Private = /^(?:::1|fc00:|fd00:|fe80:)/;
+  
+  return ipv4Private.test(ip) || ipv6Private.test(ip);
+}
+
+// 判断是否是私有/本地 IP
+function isPrivateOrLocalIp(ip: string) {
+  if (!ip) return true;
+  
+  // IPv4 私有/本地地址范围
+  const ipv4Private = /^(?:10\.|172\.(?:1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|0\.)/;
+  // IPv6 本地地址
+  const ipv6Private = /^(?:::1|fc00:|fd00:|fe80:)/;
+  
+  return ipv4Private.test(ip) || ipv6Private.test(ip);
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   
   if (url.pathname === '/api/ip') {
-    const ip = url.searchParams.get('ip') || '';
+    let ip = url.searchParams.get('ip') || '';
+    
+    // 如果没有指定 IP，尝试获取用户真实 IP
+    if (!ip) {
+      ip = getClientIp(req);
+    }
+    
     const result = await queryIP(ip);
     
     return new Response(JSON.stringify(result), {
