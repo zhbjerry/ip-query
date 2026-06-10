@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IP 查询</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         * {
             margin: 0;
@@ -170,6 +172,37 @@
             color: #742a2a;
         }
 
+        .status-domestic {
+            background: #e6fffa;
+            color: #234e52;
+        }
+
+        .status-foreign {
+            background: #fef5e7;
+            color: #744210;
+        }
+
+        .result-section {
+            margin-bottom: 30px;
+        }
+
+        .section-header {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 3px solid #e2e8f0;
+        }
+
+        .map-container {
+            height: 300px;
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            z-index: 1;
+        }
+
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -275,7 +308,8 @@
         <div id="result"></div>
 
         <footer>
-            <p>使用 <a href="https://api.ipquery.io/" target="_blank">ipquery.io</a>、<a href="https://ipwho.is/" target="_blank">ipwho.is</a> 和 <a href="https://ipapi.co/" target="_blank">ipapi.co</a> 提供数据</p>
+            <p>国内数据源: <a href="https://ip9.com.cn/" target="_blank">ip9.com.cn</a>、<a href="https://whois.pconline.com.cn/" target="_blank">pconline</a> | 
+            国外数据源: <a href="https://api.ipquery.io/" target="_blank">ipquery.io</a>、<a href="https://ipwho.is/" target="_blank">ipwho.is</a>、<a href="https://ipapi.co/" target="_blank">ipapi.co</a></p>
         </footer>
     </div>
 
@@ -285,6 +319,47 @@
         const myIpBtn = document.getElementById('myIpBtn');
         const clearBtn = document.getElementById('clearBtn');
         const resultDiv = document.getElementById('result');
+        let maps = {}; // 保存地图实例
+        
+        // WGS84 转 GCJ-02 坐标转换（火星坐标系）
+        const PI = 3.1415926535897932384626;
+        const a = 6378245.0;
+        const ee = 0.00669342162296594323;
+        
+        function transformLat(x, y) {
+            let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+            ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+            ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
+            ret += (160.0 * Math.sin(y / 12.0 * PI) + 320 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
+            return ret;
+        }
+        
+        function transformLon(x, y) {
+            let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+            ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+            ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
+            ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
+            return ret;
+        }
+        
+        function wgs84ToGcj02(lng, lat) {
+            if (outOfChina(lng, lat)) {
+                return [lng, lat];
+            }
+            let dLat = transformLat(lng - 105.0, lat - 35.0);
+            let dLng = transformLon(lng - 105.0, lat - 35.0);
+            let radLat = lat / 180.0 * PI;
+            let magic = Math.sin(radLat);
+            magic = 1 - ee * magic * magic;
+            let sqrtMagic = Math.sqrt(magic);
+            dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * PI);
+            dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * PI);
+            return [lng + dLng, lat + dLat];
+        }
+        
+        function outOfChina(lng, lat) {
+            return (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271 || false);
+        }
 
         async function queryIP(ip) {
             showLoading();
@@ -294,7 +369,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    showResult(data);
+                    showResults(data);
                 } else {
                     showError(data.error || '查询失败');
                 }
@@ -328,15 +403,31 @@
             `;
         }
 
-        function showResult(data) {
-            const flagEmoji = data.info.flag_emoji || data.info.flag?.emoji || '';
+        function renderResultCard(data, title) {
+            if (!data.success) {
+                return `
+                    <div class="result-card">
+                        <div class="result-header">
+                            <span class="ip-address">${title} - 查询失败</span>
+                            <span class="status-badge status-error">${data.source || '错误'}</span>
+                        </div>
+                        <div class="error">
+                            <p>${data.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            const info = data.info;
+            const flagEmoji = info.flag_emoji || info.flag?.emoji || '';
+            const statusClass = data.type === 'domestic' ? 'status-domestic' : 'status-foreign';
             
             // 定义信息分组和优先级
-            const importantFields = ['ip', 'type', 'version', 'country', 'country_code', 'region', 'region_code', 'city', 'postal', 'capital', 'country_capital', 'calling_code', 'country_calling_code'];
-            const locationFields = ['continent', 'continent_code', 'in_eu', 'borders'];
-            const networkFields = ['isp', 'org', 'organization', 'domain', 'asn'];
+            const importantFields = ['ip', 'type', 'version', 'country', 'country_code', 'region', 'region_code', 'city', 'area', 'postal', 'post_code', 'capital', 'country_capital', 'calling_code', 'country_calling_code'];
+            const locationFields = ['continent', 'continent_code', 'in_eu', 'borders', 'big_area'];
+            const networkFields = ['isp', 'org', 'organization', 'domain', 'asn', 'area_code'];
             const timezoneFields = ['timezone', 'timezone_id', 'timezone_abbr', 'timezone_utc', 'timezone_offset', 'timezone_dst', 'utc_offset', 'is_dst'];
-            const coordinateFields = ['latitude', 'longitude'];
+            const coordinateFields = ['latitude', 'longitude', 'lat', 'lng'];
             
             const importantItems = [];
             const locationItems = [];
@@ -347,7 +438,7 @@
             
             const processedKeys = new Set();
             
-            for (const [key, value] of Object.entries(data.info)) {
+            for (const [key, value] of Object.entries(info)) {
                 if (key === 'flag_img' || key === 'flag_emoji' || key === 'success' || key === 'readme') continue;
                 if (processedKeys.has(key)) continue;
                 
@@ -478,18 +569,103 @@
                 `);
             }
 
-            resultDiv.innerHTML = `
+            // 检查是否有经纬度信息
+            const lat = info.latitude || info.lat;
+            const lng = info.longitude || info.lng;
+            const hasCoordinates = lat && lng;
+            const mapId = `map-${data.type}-${Date.now()}`;
+            
+            let mapHtml = '';
+            if (hasCoordinates) {
+                mapHtml = `
+                    <div class="info-section">
+                        <div class="section-title">📍 位置地图</div>
+                        <div id="${mapId}" class="map-container" data-lat="${lat}" data-lng="${lng}"></div>
+                    </div>
+                `;
+            }
+            
+            return `
                 <div class="result-card">
                     <div class="result-header">
                         <span class="ip-address">
                             ${flagEmoji ? `<span class="flag-emoji">${flagEmoji}</span>` : ''}
                             ${data.ip}
                         </span>
-                        <span class="status-badge status-success">数据来源: ${data.source}</span>
+                        <span class="status-badge ${statusClass}">${title}: ${data.source}</span>
                     </div>
+                    ${mapHtml}
                     ${sections.join('')}
                 </div>
             `;
+        }
+
+        function showResults(data) {
+            // 销毁旧地图
+            Object.values(maps).forEach(map => {
+                if (map && map.remove) {
+                    map.remove();
+                }
+            });
+            maps = {};
+            
+            const domesticCard = renderResultCard(data.domestic, '国内检测');
+            const foreignCard = renderResultCard(data.foreign, '国外检测');
+            
+            resultDiv.innerHTML = `
+                <div class="result-section">
+                    <div class="section-header">🌏 国内检测结果</div>
+                    ${domesticCard}
+                </div>
+                <div class="result-section">
+                    <div class="section-header">🌍 国外检测结果</div>
+                    ${foreignCard}
+                </div>
+            `;
+            
+            // 初始化地图
+            setTimeout(() => {
+                document.querySelectorAll('.map-container').forEach(mapDiv => {
+                    const lat = parseFloat(mapDiv.dataset.lat);
+                    const lng = parseFloat(mapDiv.dataset.lng);
+
+                    if (lat && lng) {
+                        const isInChina = !outOfChina(lng, lat);
+
+                        if (isInChina) {
+                            const [mapLng, mapLat] = wgs84ToGcj02(lng, lat);
+                            const map = L.map(mapDiv.id).setView([mapLat, mapLng], 13);
+
+                            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                                subdomains: ['1', '2', '3', '4'],
+                                attribution: '&copy; <a href="https://www.amap.com/">高德地图</a>',
+                                maxZoom: 18
+                            }).addTo(map);
+
+                            L.marker([mapLat, mapLng]).addTo(map)
+                                .bindPopup(`IP 位置: ${lat.toFixed(4)}, ${lng.toFixed(4)}（已转换为 GCJ-02 展示）`)
+                                .openPopup();
+
+                            maps[mapDiv.id] = map;
+                        } else {
+                            const map = L.map(mapDiv.id).setView([lat, lng], 5);
+
+                            // 使用高德地图作为底图，解决 OpenStreetMap 在国内加载失败的问题
+                            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                                subdomains: ['1', '2', '3', '4'],
+                                attribution: '&copy; <a href="https://www.amap.com/">高德地图</a>',
+                                maxZoom: 18
+                            }).addTo(map);
+
+                            L.marker([lat, lng]).addTo(map)
+                                .bindPopup(`IP 位置: ${lat.toFixed(4)}, ${lng.toFixed(4)}（WGS84）`)
+                                .openPopup();
+
+                            maps[mapDiv.id] = map;
+                        }
+                    }
+                });
+            }, 100);
         }
 
         function formatLabel(key) {
@@ -500,6 +676,7 @@
                 version: '版本',
                 city: '城市',
                 region: '地区',
+                prov: '省份',
                 region_code: '地区代码',
                 country: '国家',
                 country_code: '国家代码',
@@ -511,8 +688,11 @@
                 continent_code: '大洲代码',
                 in_eu: '欧盟成员',
                 postal: '邮编',
+                post_code: '邮编',
                 latitude: '纬度',
+                lat: '纬度',
                 longitude: '经度',
+                lng: '经度',
                 timezone: '时区',
                 timezone_abbr: '时区缩写',
                 timezone_utc: 'UTC 偏移',
@@ -522,6 +702,7 @@
                 utc_offset: 'UTC 偏移',
                 country_calling_code: '国际区号',
                 calling_code: '国际区号',
+                area_code: '区号',
                 currency: '货币',
                 currency_name: '货币名称',
                 languages: '语言',
@@ -544,7 +725,11 @@
                 is_dst: '夏令时',
                 offset: '偏移量',
                 utc: 'UTC',
-                readme: '文档'
+                readme: '文档',
+                area: '区县',
+                big_area: '大区',
+                city_code: '城市代码',
+                city_short_code: '城市简码'
             };
             return labels[key] || key.replace(/_/g, ' ').toUpperCase();
         }
