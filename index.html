@@ -25,13 +25,13 @@
         }
 
         .container {
-            max-width: 900px;
+            max-width: 1440px;
             margin: 0 auto;
         }
 
         header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 32px;
             padding: 20px 0;
         }
 
@@ -45,6 +45,13 @@
             display: flex;
             gap: 12px;
             margin-bottom: 30px;
+        }
+
+        .results-layout {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 24px;
+            align-items: start;
         }
 
         .input-wrapper {
@@ -198,17 +205,17 @@
         }
 
         .map-container {
-            height: 300px;
+            height: 320px;
             width: 100%;
-            border-radius: 8px;
+            border-radius: 12px;
             margin-bottom: 20px;
             z-index: 1;
         }
 
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
         }
 
         .info-section {
@@ -229,23 +236,26 @@
         }
 
         .info-item {
-            padding: 16px;
+            padding: 18px;
             background: #f7fafc;
-            border-radius: 8px;
+            border-radius: 10px;
+            border: 1px solid #edf2f7;
         }
 
         .info-label {
             font-size: 0.85rem;
             color: #718096;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .info-value {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             color: #2d3748;
             font-weight: 500;
+            line-height: 1.5;
+            word-break: break-word;
         }
 
         .loading {
@@ -289,6 +299,41 @@
 
         footer a:hover {
             text-decoration: underline;
+        }
+
+        @media (max-width: 1100px) {
+            .results-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 16px;
+            }
+
+            .search-box {
+                flex-wrap: wrap;
+            }
+
+            .result-card {
+                padding: 22px;
+            }
+
+            .result-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .ip-address {
+                font-size: 1.45rem;
+                flex-wrap: wrap;
+            }
+
+            .map-container {
+                height: 260px;
+            }
         }
     </style>
 </head>
@@ -640,13 +685,15 @@
             const foreignCard = renderResultCard(data.foreign, '国外检测');
             
             resultDiv.innerHTML = `
-                <div class="result-section">
-                    <div class="section-header">🌏 国内检测结果</div>
-                    ${domesticCard}
-                </div>
-                <div class="result-section">
-                    <div class="section-header">🌍 国外检测结果</div>
-                    ${foreignCard}
+                <div class="results-layout">
+                    <div class="result-section">
+                        <div class="section-header">🌏 国内检测结果</div>
+                        ${domesticCard}
+                    </div>
+                    <div class="result-section">
+                        <div class="section-header">🌍 国外检测结果</div>
+                        ${foreignCard}
+                    </div>
                 </div>
             `;
             
