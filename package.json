@@ -7,7 +7,14 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["ip", "query", "geolocation"],
+  "keywords": [
+    "ip",
+    "query",
+    "geolocation"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "iconv-lite": "^0.7.2"
+  }
 }

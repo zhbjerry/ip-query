@@ -491,11 +491,22 @@
             const info = data.info;
             const flagEmoji = info.flag_emoji || info.flag?.emoji || '';
             const statusClass = data.type === 'domestic' ? 'status-domestic' : 'status-foreign';
+            const addressHtml = info.address ? `
+                <div class="info-section">
+                    <div class="section-title">详细地址</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Address</div>
+                            <div class="info-value">${info.address}</div>
+                        </div>
+                    </div>
+                </div>
+            ` : '';
             
             // 定义信息分组和优先级
             const importantFields = ['ip', 'type', 'version', 'country', 'country_code', 'region', 'region_code', 'city', 'area', 'postal', 'post_code', 'capital', 'country_capital', 'calling_code', 'country_calling_code'];
             const locationFields = ['continent', 'continent_code', 'in_eu', 'borders', 'big_area'];
-            const networkFields = ['isp', 'org', 'organization', 'domain', 'asn', 'area_code'];
+            const networkFields = ['isp', 'org', 'organization', 'domain', 'asn', 'area_code', 'address'];
             const timezoneFields = ['timezone', 'timezone_id', 'timezone_abbr', 'timezone_utc', 'timezone_offset', 'timezone_dst', 'utc_offset', 'is_dst'];
             const coordinateFields = ['latitude', 'longitude', 'lat', 'lng'];
             
@@ -665,6 +676,7 @@
                         <span class="status-badge ${statusClass}">${title}: ${data.source}</span>
                     </div>
                     ${mapHtml}
+                    ${addressHtml}
                     ${sections.join('')}
                 </div>
             `;
